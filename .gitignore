@@ -1,0 +1,15 @@
+.venv/
+temp/
+*.wav
+*.mp3
+*.m4a
+vision_output.json
+classified_text.json
+timeline.json
+file_list.txt
+karaoke.html
+subtitles.vtt
+subtitles.lrc
+__pycache__/
+*.pyc
+book.pdf

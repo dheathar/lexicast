@@ -1,0 +1,11 @@
+# Python 3.12 recommended (Coqui/torch/kokoro have no 3.13/3.14 wheels yet).
+# System deps (not pip): ffmpeg, pandoc, espeak-ng  ->  brew install ffmpeg pandoc espeak-ng
+
+pymupdf        # PDF text extraction (fitz)
+jenkspy        # Jenks natural-breaks font-size classification
+pydub          # audio helpers
+soundfile      # write WAVs from numpy
+numpy
+torch          # Kokoro backend
+kokoro>=0.9.2  # Kokoro-82M TTS
+misaki[en]     # English grapheme->phoneme for Kokoro
