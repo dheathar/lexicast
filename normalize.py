@@ -49,9 +49,11 @@ def _generate(text, model, host):
     return out.strip().strip('"')
 
 
-def normalize_blocks(data, model=DEFAULT_MODEL, host=DEFAULT_HOST):
+def normalize_blocks(data, model=DEFAULT_MODEL, host=DEFAULT_HOST, progress=None):
     try:
         for i, block in enumerate(data, start=1):
+            if progress:
+                progress(i, len(data), "normalize")
             text = (block.get("text") or "").strip()
             if not text or block.get("label") == "other":
                 continue

@@ -1,0 +1,162 @@
+"""Render a session into a LaTeX report from the structured notes + transcript.
+
+Fills templates/session_report_template.tex (a self-contained, good-practice
+meeting/interview report) with escaped content. Compile with:
+    pdflatex session_report.tex
+or feed it back into pdf2audio's own .tex pipeline.
+"""
+
+import os
+
+TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "templates", "session_report_template.tex")
+
+_ESC = {
+    "\\": r"\textbackslash{}", "&": r"\&", "%": r"\%", "$": r"\$",
+    "#": r"\#", "_": r"\_", "{": r"\{", "}": r"\}",
+    "~": r"\textasciitilde{}", "^": r"\textasciicircum{}",
+}
+
+# Unicode punctuation the LLM/transcript may emit -> safe LaTeX/ASCII equivalents,
+# so they don't trip "missing character" in the default fonts.
+_UNI = {
+    "—": "---", "–": "--", "‒": "--", "−": "-",
+    "‘": "`", "’": "'", "“": "``", "”": "''",
+    "…": r"\ldots{}", " ": " ", "•": r"\textbullet{}",
+    "→": r"$\rightarrow$",
+}
+
+
+def esc(s):
+    if s is None:
+        return ""
+    out = []
+    for ch in str(s):
+        if ch in _UNI:
+            out.append(_UNI[ch])
+        else:
+            out.append(_ESC.get(ch, ch))
+    return "".join(out)
+
+
+def _hms(seconds):
+    seconds = int(seconds or 0)
+    h, r = divmod(seconds, 3600)
+    m, s = divmod(r, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+
+def _itemize(items):
+    if not items:
+        return r"\textit{None recorded.}"
+    body = "\n".join(rf"  \item {esc(x)}" for x in items)
+    return "\\begin{itemize}[leftmargin=1.4em]\n" + body + "\n\\end{itemize}"
+
+
+def _action_table(items):
+    if not items:
+        return r"\textit{None recorded.}"
+    rows = []
+    for i, a in enumerate(items, 1):
+        owner = esc(a.get("owner", "")) or "--"
+        due = esc(a.get("due", "")) or "--"
+        rows.append(f"{i} & {esc(a.get('action',''))} & {owner} & {due} \\\\")
+    return (
+        "\\begin{longtable}{@{}p{0.4cm} p{9.5cm} p{2.6cm} p{2.2cm}@{}}\n"
+        "\\toprule\n\\textbf{\\#} & \\textbf{Action} & \\textbf{Owner} & \\textbf{Due} \\\\\n"
+        "\\midrule\n\\endhead\n" + "\n".join(rows) + "\n\\bottomrule\n\\end{longtable}")
+
+
+def _topics(items):
+    if not items:
+        return r"\textit{None recorded.}"
+    body = "\n".join(
+        rf"  \item \textbf{{{esc(t.get('topic',''))}}} -- {esc(t.get('details',''))}"
+        for t in items)
+    return "\\begin{itemize}[leftmargin=1.4em]\n" + body + "\n\\end{itemize}"
+
+
+def _qa(items):
+    answered = [q for q in items if (q.get("a") or "").strip()]
+    open_q = [q for q in items if not (q.get("a") or "").strip()]
+    if not answered and not open_q:
+        return r"\textit{None recorded.}"
+
+    parts = []
+    for q in answered:
+        parts.append(
+            rf"\textbf{{Q.}} {esc(q.get('q',''))}\par"
+            "\n" rf"\textbf{{A.}} {esc(q.get('a',''))}\par\vspace{{0.4em}}")
+    if open_q:
+        parts.append(r"\subsection*{\textcolor{accent}{Open / Reflection Prompts}}")
+        parts.append(r"\textit{\small Open questions the facilitator posed to "
+                     r"participants for reflection -- not answered in the session.}\par\vspace{0.3em}")
+        parts.append("\\begin{itemize}[leftmargin=1.4em]\n"
+                     + "\n".join(rf"  \item \textit{{{esc(q.get('q',''))}}}" for q in open_q)
+                     + "\n\\end{itemize}")
+    return "\n".join(parts)
+
+
+def merge_turns(segments, max_chars=900):
+    """Merge consecutive same-speaker segments into flowing turns.
+
+    Whisper often emits very short (1-3 word) segments; rendering one per line
+    repeats the speaker label endlessly. This groups a continuous speaker run
+    into a single turn (soft-split at max_chars for readability)."""
+    turns = []
+    for s in segments:
+        text = (s.get("text") or "").strip()
+        if not text:
+            continue
+        spk = s.get("speaker", "")
+        if (turns and turns[-1]["speaker"] == spk
+                and len(turns[-1]["text"]) + len(text) + 1 <= max_chars):
+            turns[-1]["text"] += " " + text
+            turns[-1]["end"] = s["end"]
+        else:
+            turns.append({"start": s["start"], "end": s["end"], "speaker": spk, "text": text})
+    return turns
+
+
+def _transcript(segments):
+    return "\n".join(
+        f"\\turn{{{_hms(t['start'])}}}{{{esc(t.get('speaker') or 'Speaker')}}}{{{esc(t['text'])}}}"
+        for t in merge_turns(segments))
+
+
+def build(notes, segments, meta, output_tex="session_report.tex", template=TEMPLATE):
+    rows = "\n".join(f"\\meta{{{esc(k)}}}{{{esc(v)}}}" for k, v in meta.items() if v)
+    summary = esc(notes.get("summary", "")) or r"\textit{None recorded.}"
+    recap = esc(notes.get("recap", "")) or r"\textit{None recorded.}"
+
+    with open(template, "r", encoding="utf-8") as f:
+        tmpl = f.read()
+
+    tools = ("Transcribed with faster-whisper; speakers via pyannote.audio; "
+             "notes extracted with a local Ollama model. Generated by pdf2audio.")
+
+    out = (tmpl
+           .replace("%%TITLE%%", esc(meta.get("Title", "Session")))
+           .replace("%%METADATA_ROWS%%", rows)
+           .replace("%%SUMMARY%%", summary)
+           .replace("%%TAKEAWAYS%%", _itemize(notes.get("takeaways", [])))
+           .replace("%%RECAP%%", recap)
+           .replace("%%DECISIONS%%", _itemize(notes.get("decisions", [])))
+           .replace("%%ACTION_ITEMS%%", _action_table(notes.get("action_items", [])))
+           .replace("%%TOPICS%%", _topics(notes.get("topics", [])))
+           .replace("%%QA%%", _qa(notes.get("qa", [])))
+           .replace("%%TRANSCRIPT%%", _transcript(segments))
+           .replace("%%TOOLS%%", esc(tools)))
+
+    with open(output_tex, "w", encoding="utf-8") as f:
+        f.write(out)
+    print(f"✅ LaTeX report: {output_tex}")
+    return output_tex
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+    notes = json.load(open(sys.argv[1]))
+    segs = json.load(open(sys.argv[2]))
+    build(notes, segs, {"Title": "Sample Session", "Date": "2026-06-26"})

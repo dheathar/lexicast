@@ -1,0 +1,114 @@
+% ============================================================================
+%  Session Transcription Report — LaTeX template
+%  Self-contained: compiles with a standard TeX Live / MiKTeX install
+%  (pdflatex). No specialised classes required.
+%
+%  Structure follows good-practice meeting-minutes and interview-transcript
+%  conventions: a metadata header (date / duration / participants / method),
+%  an executive summary, decisions, an action-items table (action / owner /
+%  due), topics, key Q&A, and a speaker-tagged, timestamped full transcript.
+%
+%  Placeholders (%%NAME%%) are filled by make_latex.py.
+% ============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{microtype}
+\usepackage[parfill]{parskip}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage[hidelinks,colorlinks=true,linkcolor=accent,urlcolor=accent]{hyperref}
+
+\definecolor{accent}{HTML}{1F6FB2}
+\definecolor{speakercol}{HTML}{1F6FB2}
+\definecolor{tscol}{HTML}{8A8A8A}
+\definecolor{rulecol}{HTML}{D8DCE2}
+
+% --- section styling -------------------------------------------------------
+\titleformat{\section}{\Large\bfseries\color{accent}}{}{0em}{}[\vspace{-0.4em}\textcolor{rulecol}{\rule{\linewidth}{0.8pt}}]
+\titleformat{\subsection}{\large\bfseries}{}{0em}{}
+
+% --- header / footer -------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.2pt}
+\lhead{\small\textcolor{tscol}{%%TITLE%%}}
+\rhead{\small\textcolor{tscol}{\thepage}}
+
+% --- transcript turn macro:  \turn{timestamp}{Speaker}{text} ---------------
+\newcommand{\turn}[3]{%
+  \par\vspace{0.55em}\noindent
+  {\small\textcolor{tscol}{[#1]}}\quad
+  {\bfseries\textcolor{speakercol}{#2}}\par
+  \noindent #3\par}
+
+% --- metadata key/value row ------------------------------------------------
+\newcommand{\meta}[2]{\textbf{#1} & #2 \\}
+
+\begin{document}
+
+% ------------------------------ Title page ---------------------------------
+\begin{center}
+  {\LARGE\bfseries %%TITLE%%}\\[0.4em]
+  {\large\textcolor{tscol}{Session Transcription Report}}\\[1.2em]
+\end{center}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}l l@{}}
+%%METADATA_ROWS%%
+\end{tabular}
+\end{center}
+
+\vspace{0.6em}
+\hrule
+\vspace{1.2em}
+
+% ------------------------------ Summary ------------------------------------
+\section*{Executive Summary}
+\addcontentsline{toc}{section}{Executive Summary}
+%%SUMMARY%%
+
+% --------------------------- Key takeaways ---------------------------------
+\section*{Key Takeaways}
+%%TAKEAWAYS%%
+
+% ------------------------------- Recap -------------------------------------
+\section*{Recap}
+%%RECAP%%
+
+% ------------------------------ Decisions ----------------------------------
+\section*{Decisions}
+%%DECISIONS%%
+
+% ----------------------------- Action items --------------------------------
+\section*{Action Items}
+%%ACTION_ITEMS%%
+
+% ------------------------------- Topics ------------------------------------
+\section*{Topics Discussed}
+%%TOPICS%%
+
+% ------------------------------ Key Q\&A ------------------------------------
+\section*{Key Questions \& Answers}
+%%QA%%
+
+% ---------------------------- Full transcript ------------------------------
+\newpage
+\section*{Full Transcript}
+%%TRANSCRIPT%%
+
+% ------------------------------ Appendix -----------------------------------
+\vfill
+\section*{Processing Notes}
+{\small\textcolor{tscol}{%%TOOLS%%}}
+
+\end{document}

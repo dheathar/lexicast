@@ -9,3 +9,19 @@ numpy
 torch          # Kokoro backend
 kokoro>=0.9.2  # Kokoro-82M TTS
 misaki[en]     # English grapheme->phoneme for Kokoro
+
+flask          # local web UI (webapp.py)
+
+# --- session2notes (audio/video -> transcript + notes + LaTeX + RAG) ---
+# Speech-to-text engines:
+faster-whisper                                                       # cross-platform (CPU; CUDA on Win/Linux). Required everywhere.
+mlx-whisper ; sys_platform == "darwin" and platform_machine == "arm64"  # Apple-Silicon GPU acceleration (Mac only). Optional but much faster.
+pyannote.audio   # speaker diarization (needs a Hugging Face token)
+# RAG uses Ollama embeddings (nomic-embed-text / bge-m3) + numpy — no extra deps.
+# PDF compile: tectonic (`brew install tectonic`) or Docker texlive/texlive.
+#
+# Platform notes:
+#   macOS (Apple Silicon): mlx-whisper installs and runs on the GPU (--asr-engine mlx).
+#   Windows / Linux:        mlx-whisper is skipped automatically; faster-whisper is used.
+#                           For NVIDIA GPUs: `--asr-engine faster-whisper --device cuda`
+#                           (install CUDA-enabled ctranslate2 / cuDNN per faster-whisper docs).

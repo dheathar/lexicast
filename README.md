@@ -1,114 +1,120 @@
-# pdf2audio — PDF / LaTeX / Markdown → audiobook + karaoke
+# lexicast
 
-Turn a document into an AI-narrated audiobook **locally** (no API keys), plus a
-self-contained **karaoke HTML** page that highlights each sentence as it's spoken.
+**Local, two-way documents ⇄ audio — plus session intelligence.** No API keys, nothing leaves your machine.
 
-Based on [Estikno/PdfToAudiobook](https://github.com/Estikno/PdfToAudiobook), extended with:
+lexicast does two complementary things, fully offline:
 
-- **LaTeX & Markdown input** — `.tex` is converted with `pandoc` to Markdown, then
-  parsed into clean narration blocks. Because the text is already clean, this path
-  **skips** the PDF font-size extraction/classification entirely.
-- **Kokoro-82M TTS** — fast and near-real-time on Apple Silicon / CPU (the original
-  used Coqui XTTS-v2, which is high quality but slow on CPU).
-- **Karaoke page** — sentence-level highlight synced to the audio, timings taken
-  directly from each synthesized clip (no alignment model). Click any line to seek.
+1. **Documents → Audiobook + Synced Transcript** — turn a PDF, LaTeX (`.tex`) or Markdown file into a narrated MP3 with a self-contained, synced transcript web page (highlight follows the audio, click-to-seek, speed controls).
+2. **Recording → Transcript + Notes + Reports + Q&A** — turn an audio/video recording into a speaker-labeled transcript, structured notes, polished **LaTeX/PDF** reports (meeting minutes *and* a participant handout), a synced transcript player, and a local **RAG** index you can ask questions against.
 
-## Pipeline
+Everything runs locally: [Kokoro](https://github.com/hexgrad/kokoro) (TTS), [Whisper](https://github.com/openai/whisper) via [MLX](https://github.com/ml-explore/mlx) or [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (ASR), [pyannote.audio](https://github.com/pyannote/pyannote-audio) (diarization), and [Ollama](https://ollama.com) (LLM + embeddings).
+
+> Origin: started as a build of [Estikno/PdfToAudiobook](https://github.com/Estikno/PdfToAudiobook) and grew into a full local media toolkit.
+
+---
+
+## What you get
+
+| From | To |
+|------|----|
+| `book.pdf` / `paper.tex` / `notes.md` | `audiobook.mp3` + `synced.html` (+ WebVTT/LRC cues) |
+| `meeting.mp4` / `call.m4a` | `transcript.{txt,srt,vtt,json}`, `notes.{md,json}`, `session_report.pdf`, `handout.pdf`, synced `transcript.html`, RAG index |
+
+A **drag-and-drop web UI** wraps the audiobook pipeline; the session pipeline is a CLI.
+
+---
+
+## Architecture
 
 ```
-.pdf  → extract_text.py → classify.py (Jenks font sizes) ┐
-.tex  → pandoc → extract_markdown.py (clean, structural)  ├→ classified_text.json
-.md   → extract_markdown.py                               ┘
-       → tts.py (Kokoro)      → temp/block_*.wav + timeline.json
-       → join_audios.py       → audiobook.mp3
-       → make_karaoke.py      → karaoke.html + subtitles.vtt + subtitles.lrc
+DOCUMENTS → AUDIO                         RECORDING → INSIGHT
+─────────────────                         ───────────────────
+ .pdf  ─ extract_text ─ classify ┐         video/audio ─ extract_audio (ffmpeg)
+ .tex  ─ pandoc ─┐                ├─►            │
+ .md   ─────────── extract_markdown          transcribe (Whisper: MLX/faster-whisper)
+                  │  classified_text.json        │
+                  ▼                          diarize (pyannote)  ← optional, needs HF token
+            tts (Kokoro) ─ timeline.json         │
+                  │                          extract_notes (Ollama, map-reduce)
+            join_audios (ffmpeg) ─ mp3            │
+                  │                          make_latex / make_handout / enrich_handout → .tex
+            make_synced → synced.html           │   compile_pdf (tectonic | docker | pdflatex)
+            + WebVTT/LRC cues                 make_synced → transcript.html
+                                              rag (Ollama embeddings + LLM) → ask/chat
+
+      webapp.py  ──────────►  browser UI for the documents→audio pipeline
 ```
 
-The karaoke page is a self-contained HTML (inline CSS/JS, no dependencies) that
-highlights each sentence as it plays — timings come straight from the synthesized
-clip durations, so no alignment model is needed. The same timings are also exported
-as standard **WebVTT** (`subtitles.vtt`) and **LRC** (`subtitles.lrc`) cue files, so
-the audio works in any external player/library (`<audio><track>`, vtt.js, lrc-kit,
-mpv, foobar2000, …).
+See [`docs/architecture.md`](docs/architecture.md) for the module-by-module map.
 
-## Setup
+---
+
+## Install
+
+**Python 3.12** is required (PyTorch/Kokoro/pyannote have no 3.13/3.14 wheels yet).
 
 ```bash
-# system deps
-brew install ffmpeg pandoc espeak-ng
+# system tools
+brew install ffmpeg pandoc espeak-ng tectonic      # macOS
+# (Linux: apt install ffmpeg pandoc espeak-ng; install tectonic or texlive; or use Docker for PDFs)
 
-# python 3.12 (torch/kokoro have no 3.13/3.14 wheels yet)
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-## Usage
+Optional, for specific features:
+- **Speaker diarization** → a free Hugging Face token (see [`docs/diarization.md`](docs/diarization.md)).
+- **Notes / RAG / text-normalization** → [Ollama](https://ollama.com) running locally (`ollama serve`) with a chat model (e.g. `qwen3:8b` or `gemma`) and an embedding model (`nomic-embed-text` or `bge-m3`).
+- **PDF compile** → `tectonic` (single binary) **or** Docker (`texlive/texlive`) **or** a `pdflatex` install.
 
+Platform note: on **Apple Silicon**, `mlx-whisper` installs automatically and runs Whisper on the GPU. On **Windows/Linux** it's skipped and `faster-whisper` (CPU, or CUDA) is used — see [`docs/install.md`](docs/install.md).
+
+---
+
+## Quick start
+
+### Documents → audiobook + synced transcript
 ```bash
-# one command, end-to-end
 .venv/bin/python main.py book.pdf
 .venv/bin/python main.py paper.tex --voice am_michael
-.venv/bin/python main.py notes.md  --out mybook.mp3 --embed
-
-# open karaoke.html in a browser
+.venv/bin/python main.py notes.md  --embed          # single self-contained synced.html
+# then open synced.html
 ```
-
-Outputs: `audiobook.mp3` and `karaoke.html` (keep them together, or use `--embed`
-to inline the audio into a single portable HTML file).
-
-### Options
-
-| flag | default | meaning |
-|------|---------|---------|
-| `--voice` | `af_heart` | Kokoro voice (`af_bella`, `am_michael`, `bf_emma`, …) |
-| `--lang` | `a` | language code (`a`=US, `b`=UK, `e`=ES, `f`=FR, `i`=IT, `p`=PT, `h`=HI, `j`=JA, `z`=ZH) |
-| `--speed` | `1.0` | speech speed |
-| `--out` | `audiobook.mp3` | output audio (`.mp3`/`.m4a`) |
-| `--embed` | off | inline audio into the HTML |
-| `--normalize` | off | rewrite text for speech via a local Ollama LLM before TTS |
-| `--normalize-model` | `qwen3:8b` | Ollama model for `--normalize` |
-| `--no-karaoke` | off | skip the karaoke page |
-| `--steps` | all | run a subset: `extract,audio,join,karaoke` (e.g. to re-run TTS only) |
-
-### Running steps individually
-
-Each module also runs standalone with sensible defaults (`book.pdf`,
-`vision_output.json`, `classified_text.json`, `temp/`, `timeline.json`):
-
+Or the web UI:
 ```bash
-.venv/bin/python extract_text.py        # PDF → vision_output.json
-.venv/bin/python classify.py            # → classified_text.json
-.venv/bin/python extract_markdown.py f.tex   # .tex/.md → classified_text.json
-.venv/bin/python tts.py                 # → temp/block_*.wav + timeline.json
-.venv/bin/python join_audios.py         # → audiobook.mp3
-.venv/bin/python make_karaoke.py        # → karaoke.html
+.venv/bin/python webapp.py          # → http://localhost:5005  (drag a file, pick options, download)
 ```
 
-## Optional: LLM text normalization (Ollama)
-
-`--normalize` pipes each block through a **local Ollama** model *before* synthesis,
-rewriting text the way it should be *spoken* — numbers, dates, currency, units,
-abbreviations and symbols — and fixing PDF hyphenation. Example:
-
-```
-$1.5M (cf. Fig. 4)  →  one point five million dollar (see Figure four)
-3.4GHz vs. 2.1GHz   →  three point four gigahertz versus two point one gigahertz
-```
-
+### Recording → transcript + notes + reports + Q&A
 ```bash
-ollama serve                          # start the daemon
-.venv/bin/python main.py book.pdf --normalize --normalize-model qwen3:8b
+.venv/bin/python session2notes.py meeting.mp4 --pdf --rag           # full pipeline
+.venv/bin/python session2notes.py call.m4a --no-diarize --asr-model large-v3-turbo
+.venv/bin/python make_handout.py meeting_session --title "Workshop" # participant handout PDF
+.venv/bin/python rag.py chat meeting_session/                       # ask questions about it
 ```
 
-This is the right job for an LLM. **Phonemization (G2P) is not** — that's
-deterministic and handled by Kokoro's misaki/espeak-ng backend, so an LLM is
-never used for pronunciation.
+Full flag reference and recipes: [`docs/audiobook.md`](docs/audiobook.md) and [`docs/sessions.md`](docs/sessions.md).
 
-## Notes
+---
 
-- Synthesis is resumable at the block level: blocks are written to `temp/` as they
-  finish. (Re-running currently re-synthesizes; delete `temp/` for a clean run.)
-- Karaoke timings are computed against the concatenation order, so MP3 encoder
-  padding adds only millisecond-level drift — imperceptible at sentence granularity.
-- PDF labelling (`header`/`body`/`caption`/`other`) is heuristic; tune
-  `n_classes` / breaks in `classify.py` if your PDF mis-labels. `other` is skipped.
+## Documentation
+
+- [`docs/architecture.md`](docs/architecture.md) — modules and data flow
+- [`docs/install.md`](docs/install.md) — setup, platforms, troubleshooting
+- [`docs/audiobook.md`](docs/audiobook.md) — documents→audio pipeline + web UI + synced/cues
+- [`docs/sessions.md`](docs/sessions.md) — recording→transcript/notes/reports/RAG
+- [`docs/diarization.md`](docs/diarization.md) — Hugging Face token & speaker labels
+- [`docs/reports.md`](docs/reports.md) — LaTeX templates, handout, enrichment, PDF compile
+
+---
+
+## Design notes
+
+- **Models do what they're good at.** Whisper transcribes (there's no speech-to-text in Ollama); Kokoro narrates; pyannote diarizes; the LLM only *understands* (notes, RAG, optional text normalization). Phonemization is handled by misaki/espeak-ng — never an LLM.
+- **Synced sync is exact** — timings come straight from each synthesized clip's duration, so no alignment model is needed.
+- **The report tooling is generic.** Templates render whatever per-session data exists (`references.json`, `alignment_section.tex`); nothing topic-specific is baked into the code.
+- **Privacy:** everything runs on-device. Recordings, transcripts and notes never leave the machine.
+
+## Licence
+
+MIT — see [`LICENSE`](LICENSE).

@@ -4,7 +4,7 @@ Reads classified_text.json, synthesizes each block, and writes:
   * temp/block_<i>.wav            individual block audio (resumable, joined later)
   * timeline.json                 per-segment text + global start/end ms
 
-The timeline is what powers the karaoke HTML: every synthesized sentence is one
+The timeline is what powers the synced HTML: every synthesized sentence is one
 entry whose start/end is its exact position in the concatenated audio, so the
 final book audio and the highlight track stay in sync without any alignment model.
 
@@ -83,10 +83,15 @@ def _silence(ms):
 
 def generate_audiobook(input_json=INPUT_JSON, temp_folder=TEMP_FOLDER,
                        voice="af_heart", lang="a", speed=1.0,
-                       timeline_path=TIMELINE_JSON, skip_other=True):
+                       timeline_path=TIMELINE_JSON, skip_other=True,
+                       progress=None, clean=True):
     from kokoro import KPipeline  # imported lazily so --help etc. stay fast
 
     os.makedirs(temp_folder, exist_ok=True)
+    if clean:  # remove any stale block_*.wav so an old run can't leak into the join
+        import glob
+        for old in glob.glob(os.path.join(temp_folder, "block_*.wav")):
+            os.remove(old)
     pipeline = KPipeline(lang_code=lang)
 
     with open(input_json, "r", encoding="utf-8") as f:
@@ -96,6 +101,8 @@ def generate_audiobook(input_json=INPUT_JSON, temp_folder=TEMP_FOLDER,
     cursor = 0  # global position in samples; matches block concat order
 
     for i, block in enumerate(data, start=1):
+        if progress:
+            progress(i, len(data), "synthesize")
         label = block.get("label", "body")
         text = (block.get("text") or "").strip()
         if not text or (skip_other and label == "other"):

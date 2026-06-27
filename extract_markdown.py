@@ -25,10 +25,14 @@ def tex_to_markdown(tex_path):
     """Convert a LaTeX file to Markdown using pandoc."""
     if not shutil.which("pandoc"):
         sys.exit("❌ pandoc not found. Install it (e.g. `brew install pandoc`).")
+    # Run from the file's own directory so \input{...} / \include{...} resolve.
+    import os
+    workdir = os.path.dirname(os.path.abspath(tex_path)) or "."
+    fname = os.path.basename(tex_path)
     # gfm = GitHub-flavoured Markdown; --wrap=none keeps paragraphs on one line.
     result = subprocess.run(
-        ["pandoc", tex_path, "-f", "latex", "-t", "gfm", "--wrap=none"],
-        capture_output=True, text=True,
+        ["pandoc", fname, "-f", "latex", "-t", "gfm", "--wrap=none"],
+        capture_output=True, text=True, cwd=workdir,
     )
     if result.returncode != 0:
         sys.exit(f"❌ pandoc failed:\n{result.stderr}")
