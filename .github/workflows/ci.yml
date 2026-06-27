@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    name: lint & syntax smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linter
+        run: pip install --quiet ruff
+
+      # Compile every module — catches syntax errors without the heavy ML deps
+      # (torch/kokoro/pyannote/mlx are intentionally NOT installed in CI).
+      - name: Byte-compile all modules
+        run: python -m compileall -q .
+
+      # Fail only on real errors: syntax (E9) and undefined names (F63,F7,F82).
+      - name: Ruff error check
+        run: ruff check --select E9,F63,F7,F82 .
+
+      - name: Validate JSON/templates exist
+        run: |
+          test -f templates/session_report_template.tex
+          test -f templates/handout_template.tex
+          test -f requirements.txt
+          test -f README.md && test -f CONSTITUTION.md
+          echo "structure OK"
