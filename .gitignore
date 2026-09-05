@@ -22,3 +22,5 @@ rag_chunks.json
 session_report.pdf
 .DS_Store
 karaoke.html
+gcp-tts.json
+data/

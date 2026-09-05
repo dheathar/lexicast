@@ -119,16 +119,33 @@ _TEMPLATE = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>%%TITLE%%</title>
 <style>
-  :root { color-scheme: light dark; --fs: 18px; }
+  /* Theme: variables default to light; @media covers system-dark users who
+     never touch the toggle; :root[data-theme] (set by the JS toggle below)
+     wins over system preference in both directions -- forcing light on a
+     dark-mode system, or dark on a light-mode system. */
+  :root {
+    color-scheme: light dark;
+    --fs: 18px;
+    --maxw: 900px;
+    --bg: #faf9f7; --fg: #222; --section-label: #8a8a8a;
+    --bar-bg: color-mix(in srgb, CanvasText 5%, transparent);
+    --bar-hover: color-mix(in srgb, CanvasText 12%, transparent);
+    --bar-border: color-mix(in srgb, CanvasText 18%, transparent);
+  }
   * { box-sizing: border-box; }
   body {
     font: var(--fs)/1.7 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
-    margin: 0; background: #faf9f7; color: #222;
+    margin: 0; background: var(--bg); color: var(--fg);
   }
   @media (prefers-color-scheme: dark) {
-    body { background: #16181c; color: #e6e6e6; }
-    .section-label { color: #9aa3b2 !important; }
-    .bar button, .bar select { background: #2a2d34; color: #e6e6e6; border-color: #3a3d44; }
+    :root:not([data-theme="light"]) {
+      --bg: #16181c; --fg: #e6e6e6; --section-label: #9aa3b2;
+      --bar-bg: #2a2d34; --bar-hover: #34373f; --bar-border: #3a3d44;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181c; --fg: #e6e6e6; --section-label: #9aa3b2;
+    --bar-bg: #2a2d34; --bar-hover: #34373f; --bar-border: #3a3d44;
   }
   header {
     position: sticky; top: 0; z-index: 10;
@@ -145,20 +162,20 @@ _TEMPLATE = """<!doctype html>
   }
   .bar button, .bar select {
     font: inherit; padding: 4px 10px; border-radius: 7px; cursor: pointer;
-    border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
-    background: color-mix(in srgb, CanvasText 5%, transparent); color: inherit;
+    border: 1px solid var(--bar-border);
+    background: var(--bar-bg); color: inherit;
   }
-  .bar button:hover { background: color-mix(in srgb, CanvasText 12%, transparent); }
+  .bar button:hover { background: var(--bar-hover); }
   .bar label { display: inline-flex; align-items: center; gap: 5px; opacity: .85; }
   .bar .spacer { flex: 1; }
   .bar #clock { font-variant-numeric: tabular-nums; opacity: .7; }
-  main { max-width: 760px; margin: 0 auto; padding: 28px 20px 50vh; }
+  main { max-width: var(--maxw); margin: 0 auto; padding: 28px 20px 50vh; }
   .seg { cursor: pointer; border-radius: 4px; transition: background .12s, color .12s; padding: 1px 2px; }
   .seg:hover { background: color-mix(in srgb, CanvasText 8%, transparent); }
   h2.seg { font-size: 1.35em; margin: 1.4em 0 .5em; display: block; }
   .section-label {
     font-size: .67em; text-transform: uppercase; letter-spacing: .08em;
-    color: #8a8a8a; margin: 1.6em 0 .4em; font-weight: 600;
+    color: var(--section-label); margin: 1.6em 0 .4em; font-weight: 600;
   }
   .seg.active { background: #ffd34d; color: #1a1a1a; box-shadow: 0 0 0 2px #ffd34d; }
   .seg.past { opacity: .55; }
@@ -185,6 +202,15 @@ _TEMPLATE = """<!doctype html>
     <label><input type="checkbox" id="autoscroll" checked> Auto-scroll</label>
     <button id="fontminus" title="Smaller text">A−</button>
     <button id="fontplus" title="Larger text">A+</button>
+    <label>Width
+      <select id="width" title="Reading column width">
+        <option value="640px">Narrow</option>
+        <option value="900px" selected>Comfortable</option>
+        <option value="1200px">Wide</option>
+        <option value="none">Full width</option>
+      </select>
+    </label>
+    <button id="themetoggle" title="Toggle light/dark theme">🌓</button>
     <span class="spacer"></span>
     <span id="clock">0:00 / 0:00</span>
   </div>
@@ -258,6 +284,26 @@ _TEMPLATE = """<!doctype html>
     document.documentElement.style.setProperty('--fs', fs + 'px'); };
   document.getElementById('fontplus').addEventListener('click', () => setFs(2));
   document.getElementById('fontminus').addEventListener('click', () => setFs(-2));
+
+  // --- reading width ---
+  const widthSel = document.getElementById('width');
+  widthSel.addEventListener('change', () =>
+    document.documentElement.style.setProperty('--maxw', widthSel.value));
+
+  // --- light/dark theme toggle (overrides system preference either way) ---
+  const themeBtn = document.getElementById('themetoggle');
+  function systemTheme() {
+    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.style.colorScheme = t;  // keeps Canvas/CanvasText in sync
+    themeBtn.textContent = t === 'dark' ? '🌙' : '☀️';
+    themeBtn.title = 'Switch to ' + (t === 'dark' ? 'light' : 'dark') + ' theme';
+  }
+  applyTheme(systemTheme());
+  themeBtn.addEventListener('click', () =>
+    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
 
   // --- keyboard shortcuts ---
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];

@@ -1,0 +1,27 @@
+# Slim, Docker-image-only requirement set (2026-08-28) -- covers exactly what
+# webapp.py's audiobook pipeline imports (extract_text, classify,
+# extract_markdown, normalize, tts, join_audios, make_synced) and nothing
+# else. The repo's own requirements.txt stays the full set (also covers
+# session2notes.py's transcription/diarization/RAG pipeline) for anyone
+# running lexicast bare-metal for those features -- this file is deliberately
+# narrower because this container is audiobook-only (the skill is the only
+# caller). Confirmed unused by grepping actual imports, not guessed:
+# faster-whisper, mlx-whisper, pyannote.audio (session2notes.py only) and
+# httpx, aiofiles, pydub, python-multipart (listed in requirements.txt but
+# zero real usage anywhere in the repo's own source).
+
+# torch is installed separately in the Dockerfile via the CPU-only wheel
+# index (https://download.pytorch.org/whl/cpu) -- a plain `pip install torch`
+# here would resolve the default CUDA build and pull ~1GB+ of unused
+# nvidia-*/cufft/cudnn wheels into a container with no GPU (real waste hit
+# 2026-08-28, mid-build: nvidia_cufft alone is 214MB). Do not add torch back
+# to this file.
+pymupdf        # PDF text extraction (fitz) -- extract_text.py
+jenkspy        # Jenks natural-breaks font-size classification -- classify.py
+soundfile      # write WAVs/read for join -- tts.py
+numpy          # tts.py
+kokoro>=0.9.2  # Kokoro-82M TTS
+misaki[en]     # English grapheme->phoneme for Kokoro
+flask          # API server (webapp.py) -- built-in multipart handling, no separate package needed
+google-auth    # Google Cloud TTS service-account auth (tts.py Greek engine, 2026-09-02)
+requests       # Google Cloud TTS REST calls (tts.py)

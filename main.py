@@ -1,9 +1,9 @@
-"""PDF / LaTeX / Markdown -> narrated audiobook + synced HTML.
+"""PDF / LaTeX / Word / Markdown -> narrated audiobook + synced HTML.
 
 Pipeline:
-  .pdf            -> extract_text -> classify (Jenks font sizes) ->
-  .tex/.md        -> extract_markdown (clean text, structural labels) ->
-                  -> classified_text.json
+  .pdf                 -> extract_text -> classify (Jenks font sizes) ->
+  .tex/.docx/.md        -> extract_markdown (clean text, structural labels) ->
+                       -> classified_text.json
                   -> tts (Kokoro)  -> temp/block_*.wav + timeline.json
                   -> join_audios   -> audiobook.mp3
                   -> make_synced  -> synced.html
@@ -36,12 +36,12 @@ def run(args):
             data = extract_text.extract_from_pdf(args.input)
             print(f"   {len(data)} blocks; classifying by font size...")
             data = classify.classify_font_sizes(data)
-        elif ext in (".tex", ".latex", ".md", ".markdown"):
+        elif ext in (".tex", ".latex", ".docx", ".md", ".markdown"):
             import extract_markdown
             print(f"📖 Extracting clean text: {args.input}")
             data = extract_markdown.extract(args.input)
         else:
-            sys.exit(f"❌ Unsupported input type: {ext} (use .pdf, .tex or .md)")
+            sys.exit(f"❌ Unsupported input type: {ext} (use .pdf, .tex, .docx or .md)")
         with open(classified, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         print(f"   -> {classified} ({len(data)} blocks)")

@@ -39,6 +39,27 @@ def tex_to_markdown(tex_path):
     return result.stdout
 
 
+def docx_to_markdown(docx_path):
+    """Convert a Word .docx file to Markdown using pandoc.
+
+    Pandoc's docx reader is one of its most mature (no macros/environments to
+    fight, unlike LaTeX), so this is a straightforward -f docx -t gfm run —
+    same flags/pattern as tex_to_markdown above.
+    """
+    if not shutil.which("pandoc"):
+        sys.exit("❌ pandoc not found. Install it (e.g. `brew install pandoc`).")
+    import os
+    workdir = os.path.dirname(os.path.abspath(docx_path)) or "."
+    fname = os.path.basename(docx_path)
+    result = subprocess.run(
+        ["pandoc", fname, "-f", "docx", "-t", "gfm", "--wrap=none"],
+        capture_output=True, text=True, cwd=workdir,
+    )
+    if result.returncode != 0:
+        sys.exit(f"❌ pandoc failed:\n{result.stderr}")
+    return result.stdout
+
+
 # --- inline markdown cleanup --------------------------------------------------
 
 _IMG = re.compile(r"!\[[^\]]*\]\([^)]*\)")                 # images
@@ -146,10 +167,12 @@ def parse_markdown(md_text):
 
 
 def extract(path):
-    """Path -> list of labelled blocks. Accepts .tex or .md."""
+    """Path -> list of labelled blocks. Accepts .tex, .docx, or .md."""
     lower = path.lower()
     if lower.endswith((".tex", ".latex")):
         md = tex_to_markdown(path)
+    elif lower.endswith(".docx"):
+        md = docx_to_markdown(path)
     else:  # .md / .markdown / anything else: treat as markdown/plain text
         with open(path, "r", encoding="utf-8") as f:
             md = f.read()

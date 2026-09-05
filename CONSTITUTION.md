@@ -74,7 +74,9 @@ monitoring. Transcription streams progress; diarization is silent until done.
 
 ## 5. Conventions & gotchas
 
-- **Intermediates:** `classified_text.json` (audio pipeline), `timeline.json` (sync + cues).
+- **Intermediates:** `classified_text.json` (audio pipeline), `timeline.json` (sync + cues),
+  `temp/blocks.json` (live per-block manifest for streaming — written atomically per block
+  by `tts.py`; an entry exists only after its wav is fully on disk; keep that invariant).
   A recording's outputs all live in `<name>_session/`.
 - **`temp/` is wiped** at the start of every `tts.generate_audiobook` run (`clean=True`) so a
   previous run can't leak block WAVs into the join. Keep this guard.

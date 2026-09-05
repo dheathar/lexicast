@@ -1,0 +1,31 @@
+services:
+  lexicast:
+    build: .
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./jobs:/app/jobs   # actual output dir (JOBS_DIR in webapp.py) -- was
+                           # unmounted until 2026-08-28, so every finished
+                           # audiobook only existed in the container's
+                           # ephemeral filesystem and needed a manual
+                           # `docker cp` to survive a rebuild. Mounting the
+                           # real path instead of the previously-unused
+                           # ./data:/app/data makes outputs host-visible by
+                           # default, no extra step needed.
+      - ./gcp-tts.json:/app/gcp-tts.json:ro   # Google Cloud TTS service account
+                           # (Greek engine, 2026-09-02). Read-only; gitignored.
+    environment:
+      # "localhost" inside the container means the container itself, not the
+      # Windows host running Ollama -- host.docker.internal is Docker
+      # Desktop's own hostname for the host machine (works via its WSL2
+      # backend, confirmed working elsewhere on this machine already).
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      # Greek engine defaults (2026-09-02): cheapest voice tier, and the
+      # free-tier character guard. Wavenet/Standard: 4M free chars/month
+      # (cap 3.8M for buffer); a Chirp3-HD voice override drops the cap to
+      # 900k automatically (its free bucket is only 1M).
+      - GOOGLE_TTS_VOICE=el-GR-Wavenet-B
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-tts.json
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
