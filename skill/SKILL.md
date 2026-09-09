@@ -133,6 +133,11 @@ normally. `captures/` is local staging only — the canonical archive happens th
   that class of change caused repeated build failures in a past service on this machine.
 - **Implementation repo:** `github.com/dheathar/lexicast-personal` (this skill's source of
   truth); `dheathar/lexicast` and `labor-innovation/lexicast` are the older upstreams.
+- **Skill deployment (verified 2026-09-09):** per-harness copies at `~/.claude/skills/`,
+  `~/.config/opencode/skills/`, `~/.pi/skills/`, and for agy/Gemini-CLI the interop alias
+  `~/.agents/skills/` (preferred over `~/.gemini/skills/`). agy: `/skills list` to verify
+  discovery, `/skills reload` to rescan without restarting. Skills load at session start —
+  an already-open session runs stale text.
 - **First-time setup:** clone the repo, `mkdir jobs archive_pending lexicon hf-cache`,
   `docker compose up -d --build`.
 - One audiobook job runs at a time (queue); transcribe has its own queue — long
