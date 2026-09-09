@@ -26,3 +26,4 @@ gcp-tts.json
 data/
 lexicon/
 archive_pending/
+hf-cache/

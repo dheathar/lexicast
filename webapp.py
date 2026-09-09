@@ -30,6 +30,7 @@ import tts
 import join_audios
 import make_synced
 import audio_cache
+import stt_pipeline
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 JOBS_DIR = os.path.join(APP_DIR, "jobs")
@@ -38,7 +39,10 @@ os.makedirs(JOBS_DIR, exist_ok=True)
 ALLOWED = {".pdf", ".tex", ".latex", ".docx", ".md", ".markdown"}
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MB uploads
+# 512 MB (was 64 MB): /transcribe accepts long voice captures, and an hour of
+# m4a/opus lands in the 30-60 MB range with headroom for video uploads.
+# Werkzeug spools large bodies to a temp file, so this costs no RAM.
+app.config["MAX_CONTENT_LENGTH"] = 512 * 1024 * 1024
 
 
 @app.errorhandler(Exception)
@@ -272,6 +276,53 @@ def _worker():
 threading.Thread(target=_worker, daemon=True).start()
 
 
+# --- Transcribe jobs (2026-09-09) ---------------------------------------------
+# A SECOND queue + worker: transcription of a long capture runs tens of
+# minutes on CPU and must never starve (or be starved by) audiobook jobs.
+# Both queues share the jobs dict / status persistence / cancel machinery.
+
+def _run_transcribe_job(job_id, spec):
+    jd = os.path.join(JOBS_DIR, job_id)
+    cancel_ev = cancel_events[job_id]
+
+    def check_cancel():
+        if cancel_ev.is_set():
+            raise JobCancelled()
+
+    def prog(cur, total, phase):
+        check_cancel()
+        _set(job_id, phase=phase, current=cur, total=total,
+             pct=round(cur / total * 100) if total else 0)
+
+    try:
+        _set(job_id, status="running", phase="extract-audio", current=0, total=0, pct=0)
+        summary = stt_pipeline.run(jd, spec, prog, check_cancel)
+        _set(job_id, status="done", phase="done", pct=100, **summary)
+    except JobCancelled:
+        _set(job_id, status="cancelled", phase="cancelled")
+    except Exception as e:
+        traceback.print_exc()
+        _set(job_id, status="error", error=f"{type(e).__name__}: {e}")
+    finally:
+        cancel_events.pop(job_id, None)
+
+
+def _stt_worker():
+    while True:
+        job_id, spec = stt_q.get()
+        ev = cancel_events.get(job_id)
+        if ev and ev.is_set():
+            _set(job_id, status="cancelled", phase="cancelled")
+            cancel_events.pop(job_id, None)
+        else:
+            _run_transcribe_job(job_id, spec)
+        stt_q.task_done()
+
+
+stt_q = queue.Queue()
+threading.Thread(target=_stt_worker, daemon=True).start()
+
+
 @app.route("/convert", methods=["POST"])
 def convert():
     f = request.files.get("file")
@@ -322,6 +373,46 @@ def convert():
     _set(job_id)  # no-op update, but persists the freshly-created entry to disk
     cancel_events[job_id] = threading.Event()
     work_q.put((job_id, spec))
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe_job():
+    """Recording -> personalized transcript + notes (stt_pipeline). Same job
+    machinery as /convert: poll /status/<job_id>, deliver from /files/. The
+    original audio + transcript + notes are staged into archive_pending/ for
+    the audio-memories flush."""
+    f = request.files.get("file")
+    if not f or not f.filename:
+        abort(400, "no file")
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in stt_pipeline.AUDIO_EXTS:
+        abort(400, f"unsupported audio type {ext}")
+
+    job_id = uuid.uuid4().hex[:12]
+    jd = os.path.join(JOBS_DIR, job_id)
+    os.makedirs(jd, exist_ok=True)
+    path = os.path.join(jd, "input" + ext)
+    f.save(path)
+
+    spec = {
+        "path": path,
+        # auto = Whisper's own detection (el/en first-class per design);
+        # force with language=el / language=en
+        "language": request.form.get("language", "auto"),
+        # large-v3-turbo for pure English; large-v3 for Greek / code-switching
+        "asr_model": request.form.get("asr_model", stt_pipeline.DEFAULT_ASR_MODEL),
+        "notes_model": request.form.get("notes_model", "qwen3:8b"),
+        "title": request.form.get("title")
+                 or os.path.splitext(os.path.basename(f.filename))[0],
+    }
+    with jobs_lock:
+        jobs[job_id] = {"status": "queued", "phase": "queued", "pct": 0,
+                        "current": 0, "total": 0, "filename": f.filename,
+                        "kind": "transcribe", "queue_pos": stt_q.qsize()}
+    _set(job_id)  # persists the freshly-created entry
+    cancel_events[job_id] = threading.Event()
+    stt_q.put((job_id, spec))
     return jsonify({"job_id": job_id})
 
 

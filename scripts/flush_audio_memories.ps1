@@ -9,5 +9,8 @@ $src = "F:\InHouse-Apps\lexicast\archive_pending"
 $dst = "\\100.118.147.81\dump\audio-memories"
 New-Item -ItemType Directory -Force $src | Out-Null
 if (-not (Test-Path $dst)) { New-Item -ItemType Directory -Force $dst | Out-Null }
-robocopy $src $dst /MOV /NP /NFL /NDL /NJH /NJS | Out-Null
+# /E is essential: captures land in per-capture SUBFOLDERS, and without it
+# robocopy only looks at the source root, sees zero files, and "succeeds"
+# while moving nothing (real bug, 2026-09-09: share stayed empty).
+robocopy $src $dst /E /MOVE /NP /NFL /NDL /NJH /NJS | Out-Null
 exit 0

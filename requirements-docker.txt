@@ -25,3 +25,9 @@ misaki[en]     # English grapheme->phoneme for Kokoro
 flask          # API server (webapp.py) -- built-in multipart handling, no separate package needed
 google-auth    # Google Cloud TTS service-account auth (tts.py Greek engine, 2026-09-02)
 requests       # Google Cloud TTS REST calls (tts.py)
+
+# faster-whisper (2026-09-09): the /transcribe deep path (stt_pipeline.py) --
+# CPU int8 ctranslate2 wheel, deliberately NOT a CUDA/GPU change (constitution:
+# no CUDA base images or GPU-dependent packages in this image). Diarization
+# (pyannote) stays out; transcripts are unlabeled.
+faster-whisper

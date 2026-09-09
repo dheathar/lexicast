@@ -70,7 +70,8 @@ def _transcribe_mlx(wav_path, model_size, language):
     return segments, _audio_duration(wav_path), result.get("language", language)
 
 
-def _transcribe_faster(wav_path, model_size, language, device, compute_type, vad, progress):
+def _transcribe_faster(wav_path, model_size, language, device, compute_type, vad, progress,
+                       hotwords=None, initial_prompt=None):
     from faster_whisper import WhisperModel
 
     # CTranslate2 supports cpu/cuda only — there is no MPS path.
@@ -78,7 +79,8 @@ def _transcribe_faster(wav_path, model_size, language, device, compute_type, vad
         device = "cpu"
     model = WhisperModel(model_size, device=device, compute_type=compute_type)
     segments, info = model.transcribe(
-        wav_path, language=language, word_timestamps=True, vad_filter=vad, beam_size=5)
+        wav_path, language=language, word_timestamps=True, vad_filter=vad, beam_size=5,
+        hotwords=hotwords, initial_prompt=initial_prompt)
     out = []
     for s in segments:
         out.append({
@@ -92,11 +94,15 @@ def _transcribe_faster(wav_path, model_size, language, device, compute_type, vad
 
 
 def transcribe(wav_path, model_size=WHISPER_DEFAULT, language=None, engine="auto",
-               device="cpu", compute_type="int8", vad=True, progress=None):
+               device="cpu", compute_type="int8", vad=True, progress=None,
+               hotwords=None, initial_prompt=None):
     eng = resolve_engine(engine)
     if eng == "mlx":
+        # MLX path ignores hotwords/initial_prompt (dictation variants are
+        # Apple-side; the biasing pipeline runs in the container, faster-whisper only)
         return _transcribe_mlx(wav_path, model_size, language)
-    return _transcribe_faster(wav_path, model_size, language, device, compute_type, vad, progress)
+    return _transcribe_faster(wav_path, model_size, language, device, compute_type, vad, progress,
+                              hotwords=hotwords, initial_prompt=initial_prompt)
 
 
 if __name__ == "__main__":

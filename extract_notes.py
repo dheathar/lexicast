@@ -9,11 +9,15 @@ The LLM does the *understanding* only — transcription is Whisper's job.
 """
 
 import json
+import os
 import re
 import urllib.request
 
 DEFAULT_MODEL = "qwen3:8b"
-HOST = "http://localhost:11434"
+# Container must reach the host's Ollama (OLLAMA_HOST is set in
+# docker-compose.yml to http://host.docker.internal:11434); host-side
+# session2notes runs with the localhost default.
+HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 CHUNK_CHARS = 11000          # keep well under model context
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 

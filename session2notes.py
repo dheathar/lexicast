@@ -61,7 +61,7 @@ def write_transcript_files(segments, out_dir, diarized):
         json.dump(segments, f, ensure_ascii=False, indent=2)
 
 
-def build_synced_html(segments, out_dir, audio_mp3, title):
+def build_synced_html(segments, out_dir, audio_mp3, title, embed=False):
     timeline = [{
         "index": i, "block": i, "label": "body",
         "section": s.get("speaker", "") if s.get("speaker") else "",
@@ -72,7 +72,8 @@ def build_synced_html(segments, out_dir, audio_mp3, title):
     with open(tl_path, "w", encoding="utf-8") as f:
         json.dump(timeline, f, ensure_ascii=False, indent=2)
     make_synced.build(timeline_path=tl_path, audio_file=audio_mp3,
-                       output_html=os.path.join(out_dir, "transcript.html"), title=title)
+                       output_html=os.path.join(out_dir, "transcript.html"), title=title,
+                       embed=embed)
 
 
 def transcript_for_llm(segments, diarized):

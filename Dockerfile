@@ -3,11 +3,10 @@
 #
 # Backend-only image (2026-08-28): webapp.py's browser UI was stripped (the
 # `lexicast` Claude Code skill is the only caller now, driving the HTTP API
-# directly) and requirements trimmed to requirements-docker.txt -- the exact
-# set the audiobook pipeline actually imports. This deliberately DROPS the
-# ability to run session2notes.py/rag.py (transcription/diarization/RAG) via
-# `docker exec` in this image -- those need the full requirements.txt and a
-# separate build/venv if ever needed again; this image is audiobook-only.
+# directly) and requirements trimmed to requirements-docker.txt. 2026-09-09:
+# faster-whisper added (CPU int8) for the /transcribe deep path
+# (stt_pipeline.py). Still deliberately OUT: pyannote/diarization and RAG
+# extras -- those would need the full requirements.txt and a separate build.
 FROM python:3.12-slim
 
 WORKDIR /app

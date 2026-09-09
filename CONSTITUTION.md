@@ -98,6 +98,15 @@ monitoring. Transcription streams progress; diarization is silent until done.
   REST; `panos-home` is opt-in only, family names are PII). G2P stays espeak-ng
   in this image for BOTH import and decode so IPA forms remain comparable —
   don't switch one side's phonemizer.
+- **/transcribe (2026-09-09):** POST audio/video → `stt_pipeline.py` in a
+  SECOND worker queue (long transcriptions must never starve audiobook jobs):
+  two-pass decode with lexicon hotword biasing (pass 2 skipped when pass 1
+  retrieves nothing), notes via `extract_notes.py`, synced player, then
+  best-effort staging into `archive_pending/` — which MUST stay a compose
+  volume (the audio-memories flush task watches the host path; an unmounted
+  path silently strands captures inside the container — hit for real on day
+  one). faster-whisper (CPU int8) is in the image; pyannote diarization is
+  not — transcripts are unlabeled.
 
 ---
 

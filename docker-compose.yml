@@ -18,8 +18,17 @@ services:
                            # (Layer 3, 2026-09-09): lexicon.db + git-ignored
                            # hindsight.env. NOT a cache -- grows across jobs
                            # and must survive job cleanup; see lexicon.py.
+      - ./archive_pending:/app/archive_pending   # audio-memories staging.
+                           # MUST be a mount (like jobs/): the scheduled
+                           # flush task watches the HOST path; an unmounted
+                           # path stages captures into the container's
+                           # ephemeral FS and they never reach the share
+                           # (real bug, 2026-09-09: first capture vanished).
       - "F:/My Library/my_works/tb_wiki:/tb_wiki:ro"   # research hub, seed
                            # source for lexicon_import.py --tbwiki. Read-only.
+      - ./hf-cache:/root/.cache/huggingface   # ASR model cache. Without this
+                           # every container recreate re-downloads ~1.5GB
+                           # (large-v3-turbo) from HF. Git-ignored.
     environment:
       # "localhost" inside the container means the container itself, not the
       # Windows host running Ollama -- host.docker.internal is Docker
