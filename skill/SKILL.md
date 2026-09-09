@@ -1,6 +1,6 @@
 ---
 name: lexicast
-description: "Local private media pipeline on cronos, driven over HTTP. (1) Documents (.docx/.pdf/.tex/.md) -> narrated audiobook + synced transcript: 'read this to me', 'make an audiobook', 'narrate this'. (2) Recordings -> personalized transcript + notes: 'transcribe this recording', 'process my idea recording'. (3) Live capture: 'capture my thoughts about X' via a host recorder helper. Kokoro TTS (+ Google TTS for Greek only), faster-whisper in; no browser UI -- this skill is the only client. Do NOT use for TTS of short snippets (a plain TTS call is cheaper)."
+description: "Local private media pipeline on cronos, driven over HTTP. (1) Documents (.docx/.pdf/.tex/.md) -> narrated audiobook + synced transcript: 'read this to me', 'make an audiobook', 'narrate this'. (2) Recordings -> personalized transcript + notes: 'transcribe this recording', 'process my idea recording'. (3) Live capture: 'capture my thoughts about X' or 'capture an idea' ALWAYS means VOICE -- launch the recorder helper (scripts/capture.ps1) or ask for an existing audio file; it is NEVER a text interview, never 'type your thoughts', and NEVER a disk search for recordings. Kokoro TTS (+ Google TTS for Greek only), faster-whisper in; no browser UI -- this skill is the only client. Do NOT use for TTS of short snippets (a plain TTS call is cheaper)."
 ---
 
 # lexicast — audiobooks, transcripts, voice captures
