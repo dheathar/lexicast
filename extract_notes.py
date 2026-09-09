@@ -19,25 +19,31 @@ _THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 _MAP_SYS = (
     "You analyze a meeting/session transcript chunk and extract structured notes. "
-    "Return ONLY JSON with keys: summary (string, 2-4 sentences), recap (string, a "
-    "fuller narrative recap of what happened in this part, 1-2 paragraphs), takeaways "
-    "(array of strings, the key points worth remembering), decisions (array of "
-    "strings), action_items (array of {action, owner, due}), topics (array of "
-    "{topic, details} where details is 1-3 sentences), qa (array of {q, a}). Use \"\" "
-    "for unknown owner/due. Base everything strictly on the text; do not invent."
+    "Return ONLY JSON with keys: title (string, 3-7 words naming this session), "
+    "summary (string, 2-4 sentences), recap (string, a fuller narrative recap of "
+    "what happened in this part, 1-2 paragraphs), takeaways (array of strings, the "
+    "key points worth remembering), decisions (array of strings), action_items "
+    "(array of {action, owner, due, at} where at copies the transcript timestamp "
+    "like \"[12:34]\" shown on the source line, \"\" if none), topics (array of "
+    "{topic, details} where details is 1-3 sentences), qa (array of {q, a}). Use "
+    "\"\" for unknown owner/due/at. Only record decisions actually made and "
+    "commitments actually given -- discussion that merely sounds like a decision "
+    "is not one; unresolved points go to qa with an empty answer. Base everything "
+    "strictly on the text; do not invent."
 )
 _REDUCE_SYS = (
     "You consolidate several partial note objects from consecutive parts of ONE "
-    "session into a single final notes object. Merge duplicates, keep it coherent and "
-    "ordered. Return ONLY JSON with keys: summary (string, a tight paragraph), recap "
-    "(string, a flowing narrative recap of the whole session, 2-4 paragraphs), "
-    "takeaways (array of strings, the most important points), decisions (array of "
-    "strings), action_items (array of {action, owner, due}), topics (array of "
-    "{topic, details}), qa (array of {q, a})."
+    "session into a single final notes object. Merge duplicates, keep it coherent "
+    "and ordered. Return ONLY JSON with keys: title (string, 3-7 words naming the "
+    "whole session), summary (string, a tight paragraph), recap (string, a flowing "
+    "narrative recap of the whole session, 2-4 paragraphs), takeaways (array of "
+    "strings, the most important points), decisions (array of strings), "
+    "action_items (array of {action, owner, due, at}), topics (array of {topic, "
+    "details}), qa (array of {q, a})."
 )
 
-_EMPTY = {"summary": "", "recap": "", "takeaways": [], "decisions": [],
-          "action_items": [], "topics": [], "qa": []}
+_EMPTY = {"title": "", "summary": "", "recap": "", "takeaways": [],
+          "decisions": [], "action_items": [], "topics": [], "qa": []}
 
 
 def _ollama_json(system, user, model):
@@ -100,8 +106,23 @@ def extract_notes(transcript_text, model=DEFAULT_MODEL, progress=None):
     return merged
 
 
+def _at_link(at):
+    """'[12:34]' -> markdown link to that moment in transcript.html (the
+    synced player accepts ?t=SECONDS). Non-timestamp text passes through."""
+    m = re.match(r"\[?(\d{1,2}):(\d{2})(?::(\d{2}))?\]?", (at or "").strip())
+    if not m:
+        return at or ""
+    secs = 0
+    for g in m.groups():
+        if g is not None:
+            secs = secs * 60 + int(g)
+    label = f"{m.group(1)}:{m.group(2)}" + (f":{m.group(3)}" if m.group(3) else "")
+    return f"[{label}](transcript.html?t={secs})"
+
+
 def notes_to_markdown(notes, title="Session Notes"):
-    L = [f"# {title}\n", "## Summary\n", (notes.get("summary") or "_None._") + "\n"]
+    L = [f"# {notes.get('title') or title}\n",
+         "## Summary\n", (notes.get("summary") or "_None._") + "\n"]
     L.append("## Key Takeaways\n")
     L += [f"- {t}" for t in notes.get("takeaways", [])] or ["_None._"]
     L.append("\n## Recap\n")
@@ -111,10 +132,12 @@ def notes_to_markdown(notes, title="Session Notes"):
     L.append("\n## Action Items\n")
     ai = notes.get("action_items", [])
     if ai:
-        L.append("| # | Action | Owner | Due |")
-        L.append("|---|--------|-------|-----|")
+        L.append("| # | Action | Owner | Due | At |")
+        L.append("|---|--------|-------|-----|----|")
         for i, a in enumerate(ai, 1):
-            L.append(f"| {i} | {a.get('action','')} | {a.get('owner','') or '—'} | {a.get('due','') or '—'} |")
+            at = _at_link(a.get("at", "")) or "—"
+            L.append(f"| {i} | {a.get('action','')} | {a.get('owner','') or '—'} "
+                     f"| {a.get('due','') or '—'} | {at} |")
     else:
         L.append("_None._")
     L.append("\n## Topics\n")

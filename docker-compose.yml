@@ -14,6 +14,12 @@ services:
                            # default, no extra step needed.
       - ./gcp-tts.json:/app/gcp-tts.json:ro   # Google Cloud TTS service account
                            # (Greek engine, 2026-09-02). Read-only; gitignored.
+      - ./lexicon:/app/lexicon   # personal-term store for personalized STT
+                           # (Layer 3, 2026-09-09): lexicon.db + git-ignored
+                           # hindsight.env. NOT a cache -- grows across jobs
+                           # and must survive job cleanup; see lexicon.py.
+      - "F:/My Library/my_works/tb_wiki:/tb_wiki:ro"   # research hub, seed
+                           # source for lexicon_import.py --tbwiki. Read-only.
     environment:
       # "localhost" inside the container means the container itself, not the
       # Windows host running Ollama -- host.docker.internal is Docker

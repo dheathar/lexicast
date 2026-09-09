@@ -90,6 +90,14 @@ monitoring. Transcription streams progress; diarization is silent until done.
 - **Transcript readability:** Whisper often emits 1–3-word segments; `make_latex.merge_turns`
   groups consecutive same-speaker fragments. Reuse it for any transcript rendering.
 - **Shell is zsh:** unquoted `$VAR` does **not** word-split; use loops or `${=VAR}`.
+- **Personal lexicon (2026-09-09):** `lexicon/lexicon.db` (git-ignored, volume-
+  mounted) is the personal-term store for personalized STT — the terms Whisper
+  gets wrong for this speaker, each with an espeak-ng IPA so retrieval is
+  phonetic. `lexicon.py` owns the store + retrieval primitive;
+  `lexicon_import.py` seeds it (tb_wiki read-only mount + Hindsight banks via
+  REST; `panos-home` is opt-in only, family names are PII). G2P stays espeak-ng
+  in this image for BOTH import and decode so IPA forms remain comparable —
+  don't switch one side's phonemizer.
 
 ---
 
