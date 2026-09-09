@@ -37,6 +37,15 @@ directory. Everything the agent needs is the four calls below.
 
 ## Transcribe — recording → personalized transcript + notes
 
+**"capture ..." with NO file path: DO NOT search the disk for recordings — ASK.**
+Either get the file path from the user, or (Windows deployments) launch the recorder
+helper, which runs in the user's own console window, auto-submits on ENTER, and writes
+`captures/<file>.job.txt` for the agent to poll:
+
+```powershell
+Start-Process powershell -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','<lexicast>\scripts\capture.ps1','-Note','<short topic>'
+```
+
 ```bash
 curl -s -X POST %%BASE_URL%%/transcribe -F "file=@<audio/video>" -F "language=auto"
 ```
