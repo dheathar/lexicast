@@ -244,7 +244,7 @@ def generate_audiobook(input_json=INPUT_JSON, temp_folder=TEMP_FOLDER,
         return {
             "i": i, "wav": wav_name, "duration_ms": round(duration_ms),
             "label": label, "section": section or "",
-            "chunks": [{"text": c["text"],
+            "chunks": [{"text": c["text"], "level": c.get("level"),
                         "start_ms": round(c["rel_start"] / SAMPLE_RATE * 1000),
                         "end_ms": round(c["rel_end"] / SAMPLE_RATE * 1000)}
                        for c in chunk_recs],

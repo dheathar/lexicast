@@ -23,6 +23,7 @@
     color-scheme: light dark;
     --fs: 18px;
     --maxw: 900px;
+    --toc-w: 260px;
     --bg: #faf9f7; --fg: #222; --section-label: #8a8a8a;
     --bar-bg: color-mix(in srgb, CanvasText 5%, transparent);
     --bar-hover: color-mix(in srgb, CanvasText 12%, transparent);
@@ -79,6 +80,35 @@
   #status.waiting .dot { background: #d9a441; animation: pulse 1.2s infinite; }
   #status.error .dot { background: #c0453e; }
   @keyframes pulse { 50% { opacity: .35; } }
+  #toc {
+    position: fixed; top: 0; left: 0; bottom: 0; width: var(--toc-w);
+    overflow-y: auto; z-index: 30;
+    background: var(--bar-bg); border-right: 1px solid var(--bar-border);
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 14px 14px;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-100%); transition: transform .18s ease;
+  }
+  body.toc-open #toc { transform: translateX(0); }
+  #toc h2 { font-size: .72em; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--section-label); margin: 0 0 10px; }
+  #toc ul { list-style: none; margin: 0; padding: 0; }
+  #toc li { margin: 1px 0; }
+  #toc a { display: block; padding: 5px 9px; border-radius: 6px; font-size: .86em;
+    line-height: 1.3; color: inherit; text-decoration: none; opacity: .8; cursor: pointer; }
+  #toc a:hover { background: var(--bar-hover); opacity: 1; }
+  #toc a.active { background: #ffd34d; color: #1a1a1a; opacity: 1; font-weight: 600; }
+  #toc a[data-level="1"], #toc a[data-level="2"] { font-weight: 700; opacity: .92; }
+  #toc a[data-level="3"] { padding-left: 22px; font-weight: 400; opacity: .8; }
+  #toc a[data-level="4"] { padding-left: 36px; font-weight: 400; opacity: .72; font-size: .95em; }
+  #toc a[data-level="5"], #toc a[data-level="6"] {
+    padding-left: 50px; font-weight: 400; opacity: .65; font-size: .92em; }
+  #toc a[data-level].active { font-weight: 700; opacity: 1; }
+  @media (max-width: 860px) {
+    #toc { box-shadow: 2px 0 20px rgba(0,0,0,.3); }
+  }
+  @media (min-width: 861px) {
+    body.toc-open { padding-left: var(--toc-w); }
+  }
   main { max-width: var(--maxw); margin: 0 auto; padding: 28px 20px 50vh; }
   .seg { cursor: pointer; border-radius: 4px; transition: background .12s, color .12s; padding: 1px 2px; }
   .seg:hover { background: color-mix(in srgb, CanvasText 8%, transparent); }
@@ -103,6 +133,7 @@
 <header>
   <h1>%%TITLE%%</h1>
   <div class="bar">
+    <button id="toctoggle" title="Contents (T)">☰ Contents</button>
     <button id="playbtn" class="primary" title="Play/Pause (Space)">▶ Play</button>
     <button data-skip="-10" title="Back 10s (←)">« 10s</button>
     <button data-skip="10" title="Forward 10s (→)">10s »</button>
@@ -135,6 +166,10 @@
     <span id="clock">0:00 / 0:00</span>
   </div>
 </header>
+<nav id="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ul id="toclist"></ul>
+</nav>
 <main id="transcript">
   <div id="pending"><span class="spin">◌</span>&nbsp; waiting for the first blocks…</div>
 </main>
@@ -218,6 +253,45 @@ if (new URLSearchParams(location.search).has("selftest")) {
 }
 
 const transcript = $("transcript"), pendingEl = $("pending");
+
+// ---------- table of contents, built incrementally as headers arrive ----------
+const tocToggle = $("toctoggle"), tocList = $("toclist");
+let headerBoundaries = [];  // segEls index at which each header starts
+let tocLinks = [];
+let activeHeaderIdx = -1;
+function setTocOpen(open) { document.body.classList.toggle("toc-open", open); }
+setTocOpen(innerWidth > 860);
+tocToggle.addEventListener("click", () => setTocOpen(!document.body.classList.contains("toc-open")));
+function addTocEntry(text, level, v0) {
+  headerBoundaries.push(segEls.length);  // the header's own segEl is pushed right after this call
+  const a = document.createElement("a");
+  a.textContent = text;
+  a.href = "#";
+  if (level) a.dataset.level = level;
+  a.addEventListener("click", (e) => {
+    e.preventDefault();
+    playFrom(v0 + 0.001);
+    if (innerWidth <= 860) setTocOpen(false);
+  });
+  const li = document.createElement("li");
+  li.appendChild(a);
+  tocList.appendChild(li);
+  tocLinks.push(a);
+}
+function updateTocActive(i) {
+  if (!headerBoundaries.length) return;
+  let hi = -1;
+  for (let k = 0; k < headerBoundaries.length; k++) {
+    if (headerBoundaries[k] <= i) hi = k; else break;
+  }
+  if (hi === activeHeaderIdx) return;
+  if (activeHeaderIdx >= 0 && tocLinks[activeHeaderIdx]) tocLinks[activeHeaderIdx].classList.remove("active");
+  activeHeaderIdx = hi;
+  if (hi >= 0 && tocLinks[hi]) {
+    tocLinks[hi].classList.add("active");
+    tocLinks[hi].scrollIntoView({ block: "nearest" });
+  }
+}
 
 // ---------- model (from /manifest) ----------
 let model = [];        // block entries in play order: {i, wav, duration_ms, label, section, chunks[]}
@@ -476,6 +550,7 @@ function renderNew() {
         el.className = "seg";
         el.dataset.v0 = v0; el.dataset.v1 = v1;
         el.textContent = ch.text;
+        addTocEntry(ch.text, ch.level, v0);
         frag.appendChild(el); segEls.push(el);
         lastSection = ch.text;
       } else {
@@ -517,6 +592,7 @@ function setActive(i) {
   if (i === active) return;
   if (active >= 0 && segEls[active]) segEls[active].classList.remove("active");
   active = i;
+  updateTocActive(i);
   if (i < 0) return;
   const el = segEls[i];
   if (!el) return;
@@ -669,6 +745,7 @@ document.addEventListener("keydown", e => {
   else if (e.key === "ArrowRight") { seekTo(vtNow() + 10); }
   else if (e.key === "[") bumpSpeed(-1);
   else if (e.key === "]") bumpSpeed(1);
+  else if (e.key === "t" || e.key === "T") { setTocOpen(!document.body.classList.contains("toc-open")); }
 });
 </script>
 </body>
