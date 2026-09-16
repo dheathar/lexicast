@@ -75,17 +75,42 @@ def build(timeline_path=TIMELINE_JSON, audio_file=AUDIO_FILE,
     else:
         audio_src = os.path.basename(audio_file)
 
-    # Render segments, opening a section heading whenever it changes.
+    # Render segments, opening a section heading whenever it changes. Consecutive
+    # header-labelled segments that share the same source `block` id are always
+    # fragments of ONE original heading: classified_text.json emits one block per
+    # heading, and a block is only split into multiple timeline entries by
+    # tts.py's split_text (now header-aware, but older timelines can still carry
+    # a split, e.g. "1." then "Opening: ..." from a "1." treated as a sentence
+    # end). Such a run is folded into one displayed heading, carrying every
+    # original index in data-i (comma-separated) and spanning the full time
+    # range, so highlighting stays lit across the audio gap between fragments.
     rows = []
     last_section = None
-    for seg in timeline:
+    n = len(timeline)
+    i = 0
+    while i < n:
+        seg = timeline[i]
         if seg["label"] == "header":
+            idxs = [seg["index"]]
+            parts = [seg["text"]]
+            end_ms = seg["end_ms"]
+            blk = seg.get("block")
+            j = i + 1
+            while (j < n and timeline[j]["label"] == "header"
+                    and timeline[j].get("block") == blk):
+                idxs.append(timeline[j]["index"])
+                parts.append(timeline[j]["text"])
+                end_ms = timeline[j]["end_ms"]
+                j += 1
+            text = " ".join(parts)
             rows.append(
-                f'<h2 class="seg header" data-i="{seg["index"]}" '
-                f'data-start="{seg["start_ms"]}" data-end="{seg["end_ms"]}">'
-                f'{_html_escape(seg["text"])}</h2>'
+                f'<h2 class="seg header" data-i="{",".join(str(x) for x in idxs)}" '
+                f'data-start="{seg["start_ms"]}" data-end="{end_ms}">'
+                f'{_html_escape(text)}</h2>'
             )
-            last_section = seg["text"]
+            last_section = text
+            i = j
+            continue
         else:
             sec = seg.get("section", "")
             if sec and sec != last_section:
@@ -96,6 +121,7 @@ def build(timeline_path=TIMELINE_JSON, audio_file=AUDIO_FILE,
                 f'data-start="{seg["start_ms"]}" data-end="{seg["end_ms"]}">'
                 f'{_html_escape(seg["text"])} </span>'
             )
+        i += 1
     body = "\n".join(rows)
 
     # Compact timeline for the JS: [start_ms, end_ms] per index.
@@ -251,6 +277,13 @@ _TEMPLATE = """<!doctype html>
   const spans = %%SPANS%%;                      // [[startMs, endMs], ...]
   const player = document.getElementById('player');
   const segEls = Array.from(document.querySelectorAll('.seg'));
+  // A merged heading (see make_synced.py's bare-number fold) carries more than
+  // one original timeline index in data-i, comma-separated; segByI maps every
+  // such index back to that one element, so highlighting stays lit across it.
+  const segByI = {};
+  segEls.forEach(el => {
+    el.dataset.i.split(',').forEach(s => { segByI[+s] = el; });
+  });
   let active = -1;
 
   // --- table of contents, built from the header segments already in the page ---
@@ -258,7 +291,7 @@ _TEMPLATE = """<!doctype html>
   const tocNav = document.getElementById('toc');
   const tocList = document.getElementById('toclist');
   const headers = Array.from(document.querySelectorAll('h2.seg.header'));
-  const headerBoundaries = headers.map(h => +h.dataset.i);
+  const headerBoundaries = headers.map(h => +h.dataset.i.split(',')[0]);
   const tocLinks = [];
   let activeHeaderIdx = -1;
   function setTocOpen(open) { document.body.classList.toggle('toc-open', open); }
@@ -319,14 +352,15 @@ _TEMPLATE = """<!doctype html>
   }
   function setActive(i) {
     if (i === active) return;
-    if (active >= 0 && segEls[active]) segEls[active].classList.remove('active');
+    const prevEl = active >= 0 ? segByI[active] : null;
     active = i;
     updateTocActive(i);
-    if (i < 0) return;
-    const el = segEls[i];
+    const el = i >= 0 ? segByI[i] : null;
+    if (prevEl && prevEl !== el) prevEl.classList.remove('active');
     if (!el) return;
     el.classList.add('active');
-    segEls.forEach((e, k) => e.classList.toggle('past', k < i));
+    const t = spans[i] ? spans[i][0] : Infinity;
+    segEls.forEach(e => e.classList.toggle('past', (+e.dataset.start) < t));
     if (autoscroll.checked) {
       const r = el.getBoundingClientRect();
       if (r.top < 100 || r.bottom > innerHeight - 60) {

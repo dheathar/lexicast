@@ -127,12 +127,19 @@ def _greek_ratio(text):
     return g / (g + l) if (g + l) else 0.0
 
 
-def split_text(text, max_length=250):
-    """Split text into <= max_length pieces, preferring sentence boundaries."""
+def split_text(text, max_length=250, is_header=False):
+    """Split text into <= max_length pieces, preferring sentence boundaries.
+
+    is_header=True skips the sentence-boundary split: a heading is one utterance,
+    and a numbered heading like "1. Opening: what this annex supports" would
+    otherwise be cut right after "1." because the sentence regex treats a digit
+    followed by "." and whitespace as a sentence end. Length-based fallback
+    splitting still applies if a header is pathologically long.
+    """
     text = re.sub(r"\s+", " ", text.strip())
     chunks = []
 
-    sentences = re.split(r"(?<=[\.\?\!;])\s+", text)
+    sentences = [text] if is_header else re.split(r"(?<=[\.\?\!;])\s+", text)
     for sentence in sentences:
         sentence = sentence.strip()
         if not sentence:
@@ -293,7 +300,7 @@ def generate_audiobook(input_json=INPUT_JSON, temp_folder=TEMP_FOLDER,
                 continue  # skip synthesis entirely for this block
 
         print(f"Processing block {i}/{len(data)} [{label}]...")
-        chunks = split_text(text, max_length=250)
+        chunks = split_text(text, max_length=250, is_header=(label == "header"))
         block_parts = []
         block_start = cursor
         chunk_records = []  # relative-to-block-start, for the cache entry
