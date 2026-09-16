@@ -142,7 +142,8 @@ def parse_markdown(md_text):
             heading = clean_inline(m.group(2)).rstrip("#").strip()
             if heading:
                 current_section = heading
-                blocks.append({"text": heading, "label": "header", "section": heading})
+                blocks.append({"text": heading, "label": "header", "section": heading,
+                               "level": len(m.group(1))})
             continue
 
         # Horizontal rules -> ignore

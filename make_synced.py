@@ -95,6 +95,7 @@ def build(timeline_path=TIMELINE_JSON, audio_file=AUDIO_FILE,
             parts = [seg["text"]]
             end_ms = seg["end_ms"]
             blk = seg.get("block")
+            level = seg.get("level")  # markdown "#" depth; None for non-md sources
             j = i + 1
             while (j < n and timeline[j]["label"] == "header"
                     and timeline[j].get("block") == blk):
@@ -103,9 +104,10 @@ def build(timeline_path=TIMELINE_JSON, audio_file=AUDIO_FILE,
                 end_ms = timeline[j]["end_ms"]
                 j += 1
             text = " ".join(parts)
+            level_attr = f' data-level="{level}"' if level else ""
             rows.append(
                 f'<h2 class="seg header" data-i="{",".join(str(x) for x in idxs)}" '
-                f'data-start="{seg["start_ms"]}" data-end="{end_ms}">'
+                f'data-start="{seg["start_ms"]}" data-end="{end_ms}"{level_attr}>'
                 f'{_html_escape(text)}</h2>'
             )
             last_section = text
@@ -213,6 +215,14 @@ _TEMPLATE = """<!doctype html>
     line-height: 1.3; color: inherit; text-decoration: none; opacity: .8; cursor: pointer; }
   #toc a:hover { background: var(--bar-hover); opacity: 1; }
   #toc a.active { background: #ffd34d; color: #1a1a1a; opacity: 1; font-weight: 600; }
+  /* Indentation and weight by markdown "#" depth (data-level, set when the source
+     is markdown; absent for other sources, which fall back to this flat default). */
+  #toc a[data-level="1"], #toc a[data-level="2"] { font-weight: 700; opacity: .92; }
+  #toc a[data-level="3"] { padding-left: 22px; font-weight: 400; opacity: .8; }
+  #toc a[data-level="4"] { padding-left: 36px; font-weight: 400; opacity: .72; font-size: .95em; }
+  #toc a[data-level="5"], #toc a[data-level="6"] {
+    padding-left: 50px; font-weight: 400; opacity: .65; font-size: .92em; }
+  #toc a[data-level].active { font-weight: 700; opacity: 1; }
   @media (max-width: 860px) {
     #toc { box-shadow: 2px 0 20px rgba(0,0,0,.3); }
   }
@@ -300,6 +310,7 @@ _TEMPLATE = """<!doctype html>
       const a = document.createElement('a');
       a.textContent = h.textContent;
       a.href = '#';
+      if (h.dataset.level) a.dataset.level = h.dataset.level;
       a.addEventListener('click', (e) => {
         e.preventDefault();
         player.currentTime = (+h.dataset.start) / 1000 + 0.001;
